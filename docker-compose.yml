@@ -1,0 +1,84 @@
+# docker-compose.yml — run all three services together, sharing one knowledge base.
+#
+# Three services:
+#   dashboard      the Streamlit web UI                       (port 8501)
+#   mattermost-bot the /askkb Mattermost integration           (port 8000)
+#   scheduler      runs the weekly auto-crawl entirely on its own —
+#                  default: every Monday at 18:00 IST (see .env / SCHEDULE_*).
+#                  This is what makes "crawl happens automatically every
+#                  week" true once deployed — nobody needs to log in and
+#                  click a button or set up an external cron job.
+#
+# All three mount the SAME ./data volume — one FAISS index, one
+# documents.jsonl, read/written by whichever service is doing the work at
+# the time. That's what "one unified knowledge base" means in practice.
+#
+# This file does NOT need a separate manual step to build the knowledge base
+# — the scheduler service runs an update immediately on first start
+# (--run-now), then keeps the weekly Monday 18:00 IST schedule forever.
+#
+# Usage:
+#   cp .env.example .env               # then fill in real values
+#   docker compose up -d --build
+#   docker compose logs -f scheduler    # watch the first crawl + every weekly refresh after
+#
+# VERIFIED: reviewed for correctness (service definitions, port mappings, the
+# shared volume, env-file wiring) and is internally consistent with both
+# Dockerfiles' EXPOSE/CMD ports. NOT verified: an actual `docker compose up`
+# run — no Docker daemon is available in the environment this was written in.
+# Build and start this for real before relying on it in production.
+
+services:
+  dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile.dashboard
+    image: takshashila-dashboard
+    restart: unless-stopped
+    ports:
+      - "8501:8501"
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8501/_stcore/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+
+  mattermost-bot:
+    build:
+      context: .
+      dockerfile: Dockerfile.mattermost
+    image: takshashila-mm-bot
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+
+  scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile.mattermost   # same image/deps; only the command differs
+    image: takshashila-mm-bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+    # No ports — this service does nothing but wait for its weekly moment and
+    # then run scripts/update_knowledge_base.py. --run-now means the FIRST
+    # `docker compose up` also builds the KB immediately (no separate manual
+    # step needed) and then keeps the weekly Monday 18:00 IST schedule forever.
+    command: ["python", "scripts/scheduler.py", "--run-now"]

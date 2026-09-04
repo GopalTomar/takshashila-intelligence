@@ -1,0 +1,62 @@
+# render.yaml — production backend deployment blueprint for Render.
+#
+# Render is chosen because it satisfies every backend requirement in the brief:
+# runs Python/FastAPI as a long-running HTTPS service with a STABLE URL and valid
+# TLS, auto-deploys on every push to the repo, restarts on crash, exposes logs,
+# runs a health check, holds secrets securely (never in git), and keeps running
+# when your laptop is off. It is NOT ngrok, localhost, or a dev tunnel.
+#
+# ─────────────────────────────────────────────────────────────────────────────
+# ONE-TIME SETUP (must be done by a human with a Render account — see README):
+#   1. Push this repo to GitHub (done by this project).
+#   2. Render Dashboard → New → Blueprint → connect this repo → apply.
+#   3. In the service's Environment tab, set the secret values below that are
+#      marked `sync: false` (GROQ_API_KEY, MATTERMOST_* tokens, Commit KB creds).
+#   4. Wait for the first deploy; verify https://<service>.onrender.com/health
+#      and /ready return 200, and /rag/status shows the KB version.
+# NOTHING here is a real secret; secrets are entered in the Render UI only.
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+  - type: web
+    name: takshashila-intelligence-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile.mattermost
+    plan: starter            # 'starter' (paid) stays warm; 'free' works but cold-starts
+    healthCheckPath: /health
+    autoDeploy: true         # redeploy on every push to the connected branch
+    disk:
+      name: kb-data
+      mountPath: /app/data   # persists the built FAISS index across deploys/restarts
+      sizeGB: 1
+    envVars:
+      - key: GROQ_MODEL
+        value: openai/gpt-oss-120b
+      - key: EMBEDDING_MODEL
+        value: BAAI/bge-small-en-v1.5
+      - key: MATTERMOST_PRIVATE_DELIVERY
+        value: dm
+      # Set the exact GitHub Pages origin(s) that call /api/query (no "*"):
+      - key: API_ALLOWED_ORIGINS
+        sync: false
+      # ── Secrets: entered in the Render dashboard, never committed ──────────
+      - key: GROQ_API_KEY
+        sync: false
+      - key: API_KEY
+        sync: false
+      - key: MATTERMOST_URL
+        sync: false
+      - key: MATTERMOST_SLASH_TOKEN
+        sync: false
+      - key: MATTERMOST_BOT_TOKEN
+        sync: false
+      - key: MATTERMOST_BOT_PUBLIC_URL
+        sync: false
+      - key: MATTERMOST_VOICE_SECRET
+        sync: false
+      - key: COMMIT_KB_URL
+        sync: false
+      - key: COMMIT_KB_USERNAME
+        sync: false
+      - key: COMMIT_KB_PASSWORD
+        sync: false

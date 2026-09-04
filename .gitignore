@@ -1,0 +1,70 @@
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Environment variables
+.env
+.streamlit/secrets.toml
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Large archives
+*.zip
+*.7z
+*.rar
+
+# Executables
+*.exe
+
+# Local models
+models/
+*.gguf
+
+# Backup files
+*.backup_*
+*.bak
+*.bak_*
+*.backup
+
+# Embedding cache (can be regenerated)
+data/index/embedding_cache.npz
+
+# VS Code
+.vscode/
+
+# Logs
+*.log
+
+
+# Raw crawl data
+data/raw/
+
+# Runtime logs
+data/logs/
+
+# Built index + derived documents/chunks — fully reproducible from a crawl +
+# scripts/update_knowledge_base.py, and can be large binary files (FAISS
+# index) that don't belong in git history. NOTE: this deliberately does NOT
+# cover data/knowledge_base/, which holds hand-supplied source files (e.g.
+# the staff handbook) that ARE meant to be tracked, not generated output.
+data/index/
+data/processed/
+
+# Archives
+*.zip
+
+# Local executables
+*.exe
+
+# Python
+.venv/
+__pycache__/
+
+# Secrets
+.env
+.streamlit/secrets.toml
+# KB artifact packaging output
+dist/

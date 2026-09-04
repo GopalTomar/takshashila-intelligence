@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Takshashila Intelligence</title>
+<meta name="description" content="Grounded, cited answers from Takshashila's knowledge base." />
+<style>
+  :root{
+    --bg:#faf6ef; --surface:#ffffff; --ink:#2b2118; --muted:#7a6f61;
+    --border:#e7ddcd; --brand:#7a1f12; --brand-d:#5c150b;
+    --marigold:#e8a13a; --marigold-d:#c9852a;
+    --ok:#1d7a4d; --warn:#b5730a; --none:#9a3b2f;
+    --focus:#7a1f12;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:'Inter','Segoe UI',system-ui,-apple-system,sans-serif;line-height:1.55}
+  a{color:var(--brand)}
+  header{background:var(--surface);border-bottom:1px solid var(--border);padding:14px 20px}
+  .bar{max-width:900px;margin:0 auto;display:flex;align-items:center;gap:14px}
+  .bar img{height:40px;width:auto}
+  .bar h1{font-size:1.15rem;margin:0;font-weight:700;letter-spacing:.01em}
+  .bar .sub{color:var(--muted);font-size:.8rem;margin-top:2px}
+  main{max-width:900px;margin:0 auto;padding:22px 20px 60px}
+  form{display:flex;gap:10px;margin-top:6px}
+  #q{flex:1;padding:13px 14px;font-size:1rem;border:1.5px solid var(--border);
+    border-radius:10px;background:var(--surface);color:var(--ink)}
+  #q:focus{outline:2px solid var(--focus);outline-offset:1px;border-color:var(--brand)}
+  button{cursor:pointer;font-family:inherit;font-weight:700;border:none;border-radius:10px}
+  #ask{background:var(--marigold);color:var(--brand-d);padding:0 22px;font-size:.95rem}
+  #ask:hover{background:var(--marigold-d);color:#fff}
+  #ask:disabled{opacity:.55;cursor:progress}
+  .hint{color:var(--muted);font-size:.82rem;margin-top:8px}
+  .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+  .chip{background:var(--surface);border:1px solid var(--border);border-radius:999px;
+    padding:6px 12px;font-size:.82rem;color:var(--brand);cursor:pointer}
+  .chip:hover{background:#fff4e2;border-color:var(--marigold)}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:14px;
+    padding:20px;margin-top:20px;box-shadow:0 1px 2px rgba(0,0,0,.03)}
+  .answer{white-space:pre-wrap;font-size:1.02rem}
+  .meta{display:flex;flex-wrap:wrap;gap:8px;margin:2px 0 16px}
+  .badge{font-size:.74rem;font-weight:700;border-radius:999px;padding:4px 11px;
+    text-transform:uppercase;letter-spacing:.04em}
+  .b-grounded{background:#e6f4ec;color:var(--ok)}
+  .b-ungrounded{background:#fdecea;color:var(--none)}
+  .b-high{background:#e6f4ec;color:var(--ok)}
+  .b-medium{background:#fbf0dd;color:var(--warn)}
+  .b-low{background:#f3ede3;color:var(--muted)}
+  .b-none{background:#fdecea;color:var(--none)}
+  .b-info{background:#f0ebe1;color:var(--muted)}
+  h2.sec{font-size:.82rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);
+    margin:22px 0 10px;border-top:1px solid var(--border);padding-top:14px}
+  ol.src{margin:0;padding-left:20px}
+  ol.src li{margin-bottom:12px}
+  .src-title{font-weight:600}
+  .src-url{font-size:.85rem;word-break:break-all}
+  .src-snip{font-size:.86rem;color:var(--muted);margin-top:2px}
+  .actions{display:flex;gap:10px;margin-top:18px;flex-wrap:wrap}
+  .ghost{background:transparent;border:1.5px solid var(--brand);color:var(--brand);padding:8px 14px;font-size:.85rem}
+  .ghost:hover{background:var(--brand);color:#fff}
+  .err{background:#fdecea;border-color:#f3c9c2;color:var(--none)}
+  footer{max-width:900px;margin:0 auto;padding:10px 20px 40px;color:var(--muted);font-size:.78rem}
+  .statusline{display:flex;flex-wrap:wrap;gap:14px;align-items:center;margin-top:10px;color:var(--muted);font-size:.78rem}
+  .dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:5px;background:var(--muted)}
+  .dot.up{background:var(--ok)} .dot.down{background:var(--none)}
+  .cfgrow{display:flex;gap:8px;margin-top:8px;align-items:center;font-size:.8rem;color:var(--muted)}
+  .cfgrow input{flex:1;padding:6px 8px;border:1px solid var(--border);border-radius:8px;font-size:.8rem}
+  .visually-hidden{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+</style>
+</head>
+<body>
+<header>
+  <div class="bar">
+    <img src="takshashila_logo.png" alt="Takshashila Institution logo" />
+    <div>
+      <h1>Takshashila Intelligence</h1>
+      <div class="sub">Grounded, cited answers from Takshashila's knowledge base</div>
+    </div>
+  </div>
+</header>
+
+<main>
+  <form id="ask-form" autocomplete="off">
+    <label for="q" class="visually-hidden">Ask a question</label>
+    <input id="q" name="q" placeholder="Ask about Takshashila — e.g. What is the ATP podcast?" />
+    <button id="ask" type="submit">Ask</button>
+  </form>
+  <div class="hint">Answers come only from indexed Takshashila sources, with citations. Nothing is invented.</div>
+
+  <div class="chips" id="samples">
+    <span class="chip">What is All Things Policy?</span>
+    <span class="chip">What is the ATP podcast?</span>
+    <span class="chip">What are Takshashila's main research areas?</span>
+    <span class="chip">What is GCPP?</span>
+  </div>
+
+  <div id="result" aria-live="polite"></div>
+
+  <details style="margin-top:22px">
+    <summary style="cursor:pointer;color:var(--muted);font-size:.82rem">Backend settings</summary>
+    <div class="cfgrow">
+      <span>API base URL:</span>
+      <input id="apibase" placeholder="https://takshashila-intelligence-api.onrender.com" />
+      <button class="ghost" id="savecfg" type="button">Save</button>
+    </div>
+    <div class="statusline" id="statusline"><span class="dot"></span> checking backend…</div>
+  </details>
+</main>
+
+<footer>
+  Takshashila Intelligence · answers are grounded in indexed sources ·
+  <span id="kbline"></span>
+</footer>
+
+<script>
+(function(){
+  "use strict";
+  // ── Backend URL resolution (no secrets in this static page) ──────────────
+  // Priority: ?api= query param  >  saved localStorage  >  built-in default.
+  // EDIT this default to your deployed backend, or set it once via the UI.
+  var DEFAULT_API = "https://takshashila-intelligence-api.onrender.com";
+  function apiBase(){
+    var p = new URLSearchParams(location.search).get("api");
+    if(p){ try{ localStorage.setItem("tk_api", p);}catch(e){} return p.replace(/\/+$/,""); }
+    var saved = "";
+    try{ saved = localStorage.getItem("tk_api") || ""; }catch(e){}
+    return (saved || DEFAULT_API).replace(/\/+$/,"");
+  }
+
+  var $ = function(s){ return document.querySelector(s); };
+  var resultEl = $("#result"), form = $("#ask-form"), qEl = $("#q"), askBtn = $("#ask");
+  $("#apibase").value = apiBase();
+
+  function esc(s){ return (s==null?"":String(s)).replace(/[&<>"']/g, function(c){
+    return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]; }); }
+
+  function badge(cls, txt){ return '<span class="badge '+cls+'">'+esc(txt)+'</span>'; }
+
+  function renderError(msg){
+    resultEl.innerHTML = '<div class="card err"><strong>Something went wrong.</strong><div style="margin-top:6px">'+esc(msg)+'</div>'+
+      '<div style="margin-top:8px;font-size:.82rem">Check the backend URL in “Backend settings”, or try again shortly.</div></div>';
+  }
+
+  function renderAnswer(d){
+    var conf = (d.confidence||"NONE").toUpperCase();
+    var confCls = {HIGH:"b-high",MEDIUM:"b-medium",LOW:"b-low",NONE:"b-none"}[conf]||"b-info";
+    var groundedBadge = d.grounded ? badge("b-grounded","Grounded: Yes") : badge("b-ungrounded","Grounded: No");
+    var html = '<div class="card">';
+    html += '<div class="meta">'+groundedBadge+badge(confCls,"Confidence: "+conf);
+    if(typeof d.latency_ms==="number") html += badge("b-info", d.latency_ms+" ms");
+    html += '</div>';
+    html += '<div class="answer">'+esc(d.answer||"")+'</div>';
+
+    var sources = d.sources||[];
+    if(sources.length){
+      html += '<h2 class="sec">Sources</h2><ol class="src">';
+      sources.forEach(function(s){
+        html += '<li><div class="src-title">'+esc(s.title||"Source")+'</div>';
+        if(s.url) html += '<div class="src-url"><a href="'+esc(s.url)+'" target="_blank" rel="noopener">'+esc(s.url)+'</a></div>';
+        if(s.snippet) html += '<div class="src-snip">'+esc(s.snippet)+'</div>';
+        html += '</li>';
+      });
+      html += '</ol>';
+    }
+    html += '<div class="actions">'+
+      '<button class="ghost" id="copybtn" type="button">Copy answer</button>'+
+      '<button class="ghost" id="dlbtn" type="button">Download (Markdown)</button>'+
+      '</div>';
+    if(d.kb_version) html += '<div style="margin-top:12px;color:var(--muted);font-size:.76rem">KB version: '+esc(d.kb_version)+'</div>';
+    html += '</div>';
+    resultEl.innerHTML = html;
+
+    $("#copybtn").onclick = function(){ navigator.clipboard && navigator.clipboard.writeText(d.answer||""); this.textContent="Copied ✓"; };
+    $("#dlbtn").onclick = function(){ downloadMd(d); };
+  }
+
+  function downloadMd(d){
+    var lines = ["# "+(d.query||"Answer"), "", d.answer||"", ""];
+    (d.sources||[]).forEach(function(s,i){ lines.push((i+1)+". ["+(s.title||"Source")+"]("+(s.url||"")+")"); });
+    lines.push("", "_Confidence: "+(d.confidence||"")+" · Grounded: "+(d.grounded?"Yes":"No")+" · KB "+(d.kb_version||"")+"_");
+    var blob = new Blob([lines.join("\n")], {type:"text/markdown"});
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "takshashila-answer.md";
+    document.body.appendChild(a); a.click(); a.remove();
+  }
+
+  function ask(q){
+    if(!q || !q.trim()) return;
+    askBtn.disabled = true; askBtn.textContent = "Thinking…";
+    resultEl.innerHTML = '<div class="card"><div class="answer">Searching the knowledge base…</div></div>';
+    fetch(apiBase()+"/api/query", {
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({query:q, interface:"dashboard"})
+    }).then(function(r){
+      if(!r.ok) throw new Error("HTTP "+r.status);
+      return r.json();
+    }).then(renderAnswer)
+      .catch(function(e){ renderError(e.message||"Network error"); })
+      .finally(function(){ askBtn.disabled=false; askBtn.textContent="Ask"; });
+  }
+
+  form.addEventListener("submit", function(e){ e.preventDefault(); ask(qEl.value); });
+  $("#samples").addEventListener("click", function(e){
+    if(e.target.classList.contains("chip")){ qEl.value=e.target.textContent; ask(qEl.value); }
+  });
+  $("#savecfg").addEventListener("click", function(){
+    var v=$("#apibase").value.trim().replace(/\/+$/,"");
+    try{ localStorage.setItem("tk_api", v); }catch(e){}
+    checkStatus();
+  });
+
+  function checkStatus(){
+    var sl=$("#statusline"), kb=$("#kbline");
+    sl.innerHTML='<span class="dot"></span> checking backend…';
+    fetch(apiBase()+"/rag/status").then(function(r){return r.json();}).then(function(s){
+      sl.innerHTML='<span class="dot up"></span> Backend online · model '+esc(s.llm_model||"")+
+        ' · '+esc((s.kb_counts&&s.kb_counts.chunks)||"?")+' chunks';
+      kb.textContent = "KB version "+(s.kb_version||"unversioned")+(s.kb_built_at?(" · built "+s.kb_built_at):"");
+    }).catch(function(){
+      sl.innerHTML='<span class="dot down"></span> Backend unreachable — set the API base URL above.';
+    });
+  }
+  checkStatus();
+})();
+</script>
+</body>
+</html>

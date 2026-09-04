@@ -1,0 +1,46 @@
+# Streamlit >=1.50 is required for the `width="stretch"` / `width="content"`
+# API that replaces the deprecated `use_container_width` argument.
+streamlit>=1.50,<2.0
+requests
+beautifulsoup4
+lxml
+ftfy
+trafilatura
+feedparser
+python-dotenv
+pandas
+numpy
+faiss-cpu
+sentence-transformers
+groq
+tqdm
+plotly
+rank-bm25
+scikit-learn
+pymupdf
+chardet
+
+# ── Incremental knowledge-base crawler (scripts/) ───────────────────────────────
+# The robust, incremental website + Commit KB crawler
+# (scripts/crawl_engine.py, scripts/update_knowledge_base.py) reuses the packages
+# already listed above — requests, beautifulsoup4, lxml, trafilatura, pymupdf,
+# numpy, faiss-cpu, sentence-transformers.
+#
+# The weekly auto-refresh (scripts/scheduler.py) adds:
+APScheduler>=3.10,<4.0
+# tzdata provides IANA timezone data for zoneinfo on Windows (needed so
+# SCHEDULE_TIMEZONE=Asia/Kolkata resolves); harmless on Linux/macOS.
+tzdata; platform_system == "Windows"
+
+# ── Mattermost bot integration (FastAPI service) ────────────────────────────────
+# These power integrations/mattermost_bot.py and do NOT affect the Streamlit app.
+fastapi
+uvicorn[standard]
+httpx
+python-multipart
+# python-dotenv is already listed above (used by both Streamlit and the bot).
+# Audit note: pytesseract, and duplicate pymupdf/chardet lines, were removed
+# from here — pytesseract (an actual OCR engine) was never imported anywhere
+# in the codebase; PDF garbage handling is heuristic detection-and-drop (see
+# src/utils.py's is_probably_ocr_garbage), not real OCR. pymupdf and chardet
+# are already listed once, above.

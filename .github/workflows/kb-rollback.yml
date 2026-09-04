@@ -1,0 +1,64 @@
+name: KB rollback
+
+# Manual rollback to a previously-published KB snapshot (Section 32). Lists the
+# available versions and, if given one, restores it as the active KB and
+# republishes the kb-latest artifact so production picks it up.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "KB version to roll back to (leave blank to just LIST versions)"
+        type: string
+        required: false
+
+permissions:
+  contents: write
+
+jobs:
+  rollback:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Restore KB data (snapshots live here)
+        uses: actions/cache@v4
+        with:
+          path: data
+          key: kb-data-rollback-${{ github.run_id }}
+          restore-keys: kb-data-
+      - name: List versions
+        run: |
+          python - <<'PY'
+          from src import kb_version
+          for v in kb_version.list_versions():
+              print(("* " if v["active"] else "  ") + v["version"])
+          PY
+      - name: Roll back
+        if: ${{ inputs.version != '' }}
+        run: |
+          python - <<'PY'
+          import os
+          from src import kb_version
+          m = kb_version.rollback(os.environ["V"])
+          print("Rolled back. Active version is now:", m["version"])
+          PY
+        env:
+          V: ${{ inputs.version }}
+      - name: Republish kb-latest
+        if: ${{ inputs.version != '' }}
+        run: python scripts/package_kb.py --out dist/kb-latest.tar.gz
+      - name: Upload restored artifact
+        if: ${{ inputs.version != '' }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: kb-latest
+          name: Latest knowledge base
+          files: dist/kb-latest.tar.gz

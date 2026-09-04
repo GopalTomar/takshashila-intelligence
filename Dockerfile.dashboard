@@ -1,0 +1,66 @@
+# Dockerfile.dashboard — container image for the Takshashila Streamlit dashboard.
+#
+# Audit finding: only Dockerfile.mattermost existed. The dashboard (app.py) —
+# the primary user-facing surface — had no container image at all, so
+# "runs independently of my laptop" wasn't actually true for it. This mirrors
+# Dockerfile.mattermost's structure and hardening (non-root user, .dockerignore-
+# scoped build context, healthcheck).
+#
+# Build:
+#   docker build -f Dockerfile.dashboard -t takshashila-dashboard .
+#
+# Run (mount your real .env and the prebuilt FAISS index/documents):
+#   docker run -d --name takshashila-dashboard \
+#     -p 8501:8501 \
+#     --env-file .env \
+#     -v "$(pwd)/data:/app/data" \
+#     takshashila-dashboard
+#
+# Notes:
+# * This image only SERVES the dashboard; it does not crawl or build the KB.
+#   Use scripts/update_knowledge_base.py (locally, or as a separate scheduled
+#   job/container — see docker-compose.yml) to populate ./data before or
+#   alongside running this.
+# * Set DASHBOARD_ADMIN_PASSWORD in .env before exposing this beyond a
+#   trusted network — see app.py's admin-gate audit note for why.
+# * Same non-root/volume-ownership note as Dockerfile.mattermost: the
+#   container runs as uid 1000; `chown -R 1000:1000 data/` on the host if the
+#   mounted volume isn't writable, or pass --user "$(id -u):$(id -g)".
+
+FROM python:3.11-slim
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    HF_HUB_DISABLE_SYMLINKS_WARNING=1 \
+    STREAMLIT_SERVER_HEADLESS=true \
+    STREAMLIT_BROWSER_GATHER_USAGE_STATS=false
+
+WORKDIR /app
+
+# System deps occasionally needed by faiss-cpu / sentence-transformers wheels,
+# plus curl for the HEALTHCHECK below.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        build-essential curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python deps first for better layer caching.
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy the project. .dockerignore keeps .env, data/, and other local-only
+# files out of the build context — secrets are never baked into the image.
+COPY . .
+
+RUN useradd --create-home --uid 1000 appuser \
+    && mkdir -p /app/data \
+    && chown -R appuser:appuser /app
+USER appuser
+
+EXPOSE 8501
+
+# Streamlit exposes its own health endpoint at /_stcore/health (verified
+# during this audit — see chat notes — returns 200 once the server is up).
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+    CMD curl -f http://localhost:8501/_stcore/health || exit 1
+
+CMD ["streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0.0"]

@@ -1,0 +1,67 @@
+# Dockerfile.mattermost — container image for the Takshashila Mattermost RAG bot.
+#
+# Build:
+#   docker build -f Dockerfile.mattermost -t takshashila-mm-bot .
+#
+# Run (mount your real .env and the prebuilt FAISS index):
+#   docker run -d --name takshashila-mm-bot \
+#     -p 8000:8000 \
+#     --env-file .env \
+#     -v "$(pwd)/data:/app/data" \
+#     takshashila-mm-bot
+#
+# Notes:
+# * The FAISS index (data/index/faiss.index + metadata) must already be built.
+#   This image does not build the knowledge base; it only serves queries.
+# * The embedding model downloads from Hugging Face on first run unless cached.
+# * The container runs as a non-root user (uid 1000). If the mounted ./data
+#   directory is owned by a different uid on the host, the container won't be
+#   able to write to it (e.g. logs, cache) — either `chown -R 1000:1000 data/`
+#   on the host first, or run the container with `--user "$(id -u):$(id -g)"`
+#   to match your host user instead.
+# * Secrets (.env) are passed at RUN time via --env-file, never COPYed into
+#   the image — see .dockerignore for what's deliberately excluded from the
+#   build context.
+
+FROM python:3.11-slim
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    HF_HUB_DISABLE_SYMLINKS_WARNING=1
+
+WORKDIR /app
+
+# System deps occasionally needed by faiss-cpu / sentence-transformers wheels.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        build-essential curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python deps first for better layer caching.
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy the project (src/, integrations/, scripts/, etc.). .dockerignore keeps
+# .env, data/, and other local-only files out of the build context entirely —
+# see that file for why (secrets must never be baked into an image layer).
+COPY . .
+
+# Audit finding: this image had no USER directive, so the process ran as root
+# inside the container — unnecessary privilege for a Python web service with
+# no need for root (no privileged ports, no system-level changes at runtime).
+# Run as a dedicated non-root user instead.
+RUN useradd --create-home --uid 1000 appuser \
+    && mkdir -p /app/data \
+    && chown -R appuser:appuser /app
+USER appuser
+
+EXPOSE 8000
+
+# The app already exposes GET /health (see integrations/mattermost_bot.py) —
+# wire it to Docker's own health tracking so `docker ps` / orchestrators can
+# see a container that's up but not actually serving requests.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+    CMD sh -c 'curl -f http://localhost:${PORT:-8000}/health || exit 1'
+
+# Bind to $PORT when the platform injects one (Render / Railway / Fly / Cloud
+# Run all set it), else default to 8000. Shell form so the variable expands.
+CMD ["sh", "-c", "uvicorn integrations.mattermost_bot:app --host 0.0.0.0 --port ${PORT:-8000}"]

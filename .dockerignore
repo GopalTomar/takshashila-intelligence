@@ -1,0 +1,64 @@
+# .dockerignore — audit finding: this file did not exist. `COPY . .` in
+# Dockerfile.mattermost (and any future Dockerfile) would otherwise copy
+# EVERYTHING in the build context into the image — including .env, which
+# normally sits right next to the Dockerfile during local development and
+# contains real secrets (GROQ_API_KEY, MATTERMOST_BOT_TOKEN,
+# MATTERMOST_SLASH_TOKEN, MATTERMOST_VOICE_SECRET, Commit KB credentials).
+# Those would be baked into the image layers permanently — recoverable by
+# anyone who can pull or inspect the image — even if a later build step
+# deleted the file, since Docker layers are immutable and cumulative.
+# Secrets belong in --env-file / -e / a secrets manager at RUN time, never in
+# the image itself.
+
+# Secrets — never bake these into an image
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Version control
+.git/
+.gitignore
+
+# Python artifacts
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Local dev / OS cruft
+.DS_Store
+*.swp
+.vscode/
+.idea/
+
+# Windows-only / local-dev-only tooling — never belongs in a container image
+*.exe
+*.bat
+*.ps1
+
+# Generated data — mounted as a volume at runtime instead (see Dockerfile
+# comments), not baked into the image; keeps the image reproducible and small
+data/
+
+# Logs and backups
+*.log
+*.bak
+*.backup_*
+
+# Large archives that have no place in a build context
+*.zip
+*.7z
+*.rar
+
+# Docs not needed at runtime
+*.md
+!README.md

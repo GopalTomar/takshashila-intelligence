@@ -1,0 +1,102 @@
+name: KB pipeline (crawl → build → validate → publish)
+
+# Scheduled + manual knowledge-base refresh. GitHub Actions is where ingestion
+# runs (never your laptop). It crawls the sources, rebuilds + validates the
+# index, and publishes it as the "kb-latest" GitHub Release asset. The always-on
+# backend fetches that artifact (on boot and, if KB_REFRESH_INTERVAL_MIN is set,
+# periodically), so a rebuild reaches production automatically.
+#
+# Triggers:
+#   • Daily 02:00 IST  (incremental refresh)          -> cron 30 20 * * *  (UTC)
+#   • Weekly Sun 03:00 IST (full reconciliation)       -> cron 30 21 * * 6  (UTC)
+#   • Manual (workflow_dispatch): choose incremental/full  (Section 30 #6)
+# Change the schedule by editing the cron lines below (they are UTC).
+
+on:
+  schedule:
+    - cron: "30 20 * * *"   # daily 02:00 Asia/Kolkata (incremental)
+    - cron: "30 21 * * 6"   # Sunday 03:00 Asia/Kolkata (full reconciliation)
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "incremental or full"
+        type: choice
+        default: incremental
+        options: [incremental, full]
+
+concurrency:
+  group: kb-pipeline
+  cancel-in-progress: false
+
+permissions:
+  contents: write   # to publish the kb-latest release asset
+
+jobs:
+  build-kb:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      GROQ_MODEL: openai/gpt-oss-120b
+      EMBEDDING_MODEL: BAAI/bge-small-en-v1.5
+      COMMIT_KB_URL: ${{ secrets.COMMIT_KB_URL }}
+      COMMIT_KB_USERNAME: ${{ secrets.COMMIT_KB_USERNAME }}
+      COMMIT_KB_PASSWORD: ${{ secrets.COMMIT_KB_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Restore previous KB (so incremental + rollback have a baseline)
+        uses: actions/cache@v4
+        with:
+          path: data
+          key: kb-data-${{ github.run_id }}
+          restore-keys: kb-data-
+
+      - name: Decide mode
+        id: mode
+        run: |
+          MODE="${{ github.event.inputs.mode }}"
+          if [ -z "$MODE" ]; then
+            # Scheduled: the Sunday 21:30 UTC run is the weekly full reconciliation.
+            if [ "$(date -u +%u-%H%M)" = "6-2130" ]; then MODE=full; else MODE=incremental; fi
+          fi
+          echo "mode=$MODE" >> "$GITHUB_OUTPUT"
+          echo "Running KB pipeline in '$MODE' mode."
+
+      - name: Crawl + build + validate (with auto-rollback on failure)
+        run: |
+          if [ "${{ steps.mode.outputs.mode }}" = "full" ]; then
+            python scripts/update_knowledge_base.py --full
+          else
+            python scripts/update_knowledge_base.py
+          fi
+          python scripts/validate_kb.py
+
+      - name: Package KB artifact
+        run: python scripts/package_kb.py --out dist/kb-latest.tar.gz
+
+      - name: Publish kb-latest release asset
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: kb-latest
+          name: Latest knowledge base
+          files: dist/kb-latest.tar.gz
+          body: |
+            Auto-published knowledge base (${{ steps.mode.outputs.mode }} run).
+            The backend fetches this asset as kb-latest.tar.gz.
+
+      - name: Upload KB as a workflow artifact too (audit trail)
+        uses: actions/upload-artifact@v4
+        with:
+          name: kb-${{ github.run_id }}
+          path: dist/kb-latest.tar.gz
+          retention-days: 14

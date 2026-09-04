@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install test dependencies
+        # Offline test suite mocks the embedding model, so the heavy
+        # torch/sentence-transformers/streamlit stack is not needed to run it.
+        run: |
+          python -m pip install --upgrade pip
+          pip install numpy faiss-cpu rank-bm25 python-dotenv pytest \
+                      fastapi "httpx>=0.24" python-multipart pydantic \
+                      beautifulsoup4 lxml ftfy chardet
+
+      - name: Byte-compile all sources (syntax check)
+        run: python -m compileall -q src integrations scripts app.py
+
+      - name: Import core modules
+        run: |
+          python - <<'PY'
+          from src import config, kb_version, vector_store, retriever, rag_pipeline, rag_service, groq_client
+          assert config.AVAILABLE_MODELS == ["openai/gpt-oss-120b"], config.AVAILABLE_MODELS
+          assert config.GROQ_MODEL == "openai/gpt-oss-120b", config.GROQ_MODEL
+          print("config OK:", config.GROQ_MODEL)
+          PY
+
+      - name: Run offline test suite
+        run: |
+          python -m pytest tests/ -q \
+            --ignore=tests/test_dashboard.py \
+            --ignore=tests/test_dashboard_safety_helpers.py \
+            --ignore=tests/test_dashboard_helpers.py
+
+  secret-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fail if a real secret looks committed
+        run: |
+          if grep -rInE 'gsk_[A-Za-z0-9]{20,}|hf_[A-Za-z0-9]{20,}|xox[baprs]-[A-Za-z0-9-]{10,}' \
+               --include='*.py' --include='*.md' --include='*.yml' --include='*.txt' \
+               --include='*.json' --include='*.env*' . ; then
+            echo "::error::Possible committed secret found."; exit 1
+          fi
+          echo "No obvious committed secrets."
