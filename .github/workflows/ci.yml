@@ -9,7 +9,7 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
@@ -18,14 +18,16 @@ jobs:
           python-version: "3.11"
           cache: pip
 
-      - name: Install test dependencies
-        # Offline test suite mocks the embedding model, so the heavy
-        # torch/sentence-transformers/streamlit stack is not needed to run it.
+      - name: Install dependencies
+        # Single source of truth: install the exact runtime dependencies the
+        # application declares in requirements.txt (the same set local, Docker
+        # and Render use), so CI can never drift from production by omitting a
+        # package such as `requests`. pytest is the only test-only dependency
+        # and is intentionally NOT a runtime dependency.
         run: |
           python -m pip install --upgrade pip
-          pip install numpy faiss-cpu rank-bm25 python-dotenv pytest \
-                      fastapi "httpx>=0.24" python-multipart pydantic \
-                      beautifulsoup4 lxml ftfy chardet
+          pip install -r requirements.txt
+          pip install pytest
 
       - name: Byte-compile all sources (syntax check)
         run: python -m compileall -q src integrations scripts app.py
@@ -39,12 +41,11 @@ jobs:
           print("config OK:", config.GROQ_MODEL)
           PY
 
-      - name: Run offline test suite
-        run: |
-          python -m pytest tests/ -q \
-            --ignore=tests/test_dashboard.py \
-            --ignore=tests/test_dashboard_safety_helpers.py \
-            --ignore=tests/test_dashboard_helpers.py
+      - name: Run full test suite
+        # With the full dependency set installed, the entire suite runs —
+        # including the crawler tests (require `requests`) and the Streamlit
+        # dashboard tests. Nothing is skipped or ignored.
+        run: python -m pytest tests/ -q
 
   secret-scan:
     runs-on: ubuntu-latest
