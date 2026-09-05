@@ -22,13 +22,9 @@ services:
     name: takshashila-intelligence-api
     runtime: docker
     dockerfilePath: ./Dockerfile.mattermost
-    plan: starter            # 'starter' (paid) stays warm; 'free' works but cold-starts
+    plan: free
     healthCheckPath: /health
-    autoDeploy: true         # redeploy on every push to the connected branch
-    disk:
-      name: kb-data
-      mountPath: /app/data   # persists the built FAISS index across deploys/restarts
-      sizeGB: 1
+    autoDeploy: true
     envVars:
       - key: GROQ_MODEL
         value: openai/gpt-oss-120b
