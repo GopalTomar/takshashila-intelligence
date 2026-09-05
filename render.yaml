@@ -32,9 +32,12 @@ services:
         value: BAAI/bge-small-en-v1.5
       - key: MATTERMOST_PRIVATE_DELIVERY
         value: dm
-      # Set the exact GitHub Pages origin(s) that call /api/query (no "*"):
-      - key: API_ALLOWED_ORIGINS
+      # Set the exact GitHub Pages origin(s) that call /api/query (no "*"):      - key: API_ALLOWED_ORIGINS
         sync: false
+      - key: KB_ARTIFACT_URL
+        value: https://github.com/GopalTomar/takshashila-intelligence/releases/download/kb-latest/kb-latest.tar.gz
+      - key: KB_FETCH_ON_BOOT
+        value: "true"
       # ── Secrets: entered in the Render dashboard, never committed ──────────
       - key: GROQ_API_KEY
         sync: false
